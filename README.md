@@ -10,15 +10,26 @@
 </p>
 
 <p align="center">
-  <a href="#-application-preview--interactive-demo"><img alt="Next.js 14" src="https://img.shields.io/badge/Next.js-14.2-black?style=for-the-badge&logo=next.js&logoColor=white"></a>
-  <a href="#-application-preview--interactive-demo"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-Strict-3178c6?style=for-the-badge&logo=typescript&logoColor=white"></a>
-  <a href="#-anti-hallucination-pipeline"><img alt="Groq" src="https://img.shields.io/badge/Groq-Llama_3.3_70B-f55036?style=for-the-badge&logo=groq&logoColor=white"></a>
-  <a href="#-technical-specifications"><img alt="Playwright" src="https://img.shields.io/badge/Playwright-v1.40+-2EAD33?style=for-the-badge&logo=playwright&logoColor=white"></a>
-  <a href="#-deploy-to-vercel"><img alt="Vercel" src="https://img.shields.io/badge/Vercel-Ready-000000?style=for-the-badge&logo=vercel&logoColor=white"></a>
+  <a href="https://speccraft-ai-five.vercel.app" target="_blank">
+    <img src="https://img.shields.io/badge/🌐_Live_Deployment-speccraft--ai--five.vercel.app-000000?style=for-the-badge&logo=vercel&logoColor=white&labelColor=6388fe" alt="Live Vercel App">
+  </a>
 </p>
 
 <p align="center">
-  <a href="#-application-preview--interactive-demo"><b>✨ Live Studio Demo</b></a> •
+  🔗 <strong>Live Demo App:</strong> <a href="https://speccraft-ai-five.vercel.app" target="_blank"><strong>https://speccraft-ai-five.vercel.app</strong></a>
+</p>
+
+<p align="center">
+  <a href="https://speccraft-ai-five.vercel.app"><img alt="Next.js 14" src="https://img.shields.io/badge/Next.js-14.2-black?style=for-the-badge&logo=next.js&logoColor=white"></a>
+  <a href="https://speccraft-ai-five.vercel.app"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-Strict-3178c6?style=for-the-badge&logo=typescript&logoColor=white"></a>
+  <a href="#-anti-hallucination-pipeline"><img alt="Groq" src="https://img.shields.io/badge/Groq-Llama_3.3_70B-f55036?style=for-the-badge&logo=groq&logoColor=white"></a>
+  <a href="#-technical-specifications"><img alt="Playwright" src="https://img.shields.io/badge/Playwright-v1.40+-2EAD33?style=for-the-badge&logo=playwright&logoColor=white"></a>
+  <a href="https://speccraft-ai-five.vercel.app"><img alt="Vercel" src="https://img.shields.io/badge/Vercel-Deployed-000000?style=for-the-badge&logo=vercel&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="https://speccraft-ai-five.vercel.app"><b>🌐 Launch App</b></a> •
+  <a href="#-application-preview--interactive-demo"><b>✨ Studio Preview</b></a> •
   <a href="#-interactive-qa-artifacts-samples"><b>🧪 Sample Artifacts</b></a> •
   <a href="#-anti-hallucination-pipeline"><b>🛡️ Anti-Hallucination Engine</b></a> •
   <a href="#-quick-start"><b>🚀 Quick Start</b></a> •
