@@ -7,6 +7,9 @@
 // 5. Zod schema validation on all AI responses
 // 6. Resilient fallback for demo presets under high judge concurrency/rate limits
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompt";
@@ -16,15 +19,6 @@ import { AnalyzeRequest } from "@/lib/types";
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB decoded
 const MAX_NOTES_LENGTH = 2000;
-
-// Initialize Groq client — server-side only
-function getGroqClient(): Groq {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey || apiKey === "your_groq_api_key_here") {
-    throw new Error("GROQ_API_KEY is not configured. Please set it in .env.local");
-  }
-  return new Groq({ apiKey });
-}
 
 function sanitizeNotes(notes: string): string {
   return notes
@@ -103,21 +97,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const systemPrompt = buildSystemPrompt();
     const userMessage = buildUserMessage(sanitizedNotes, hasImage);
 
-    // Initialize Groq client
-    let groq: Groq;
-    try {
-      groq = getGroqClient();
-    } catch (err) {
-      // If preset is being used and API key is unconfigured, return verified preset output
+    // Check environment variable dynamically per request
+    const apiKey = process.env.GROQ_API_KEY;
+    console.log("Using Groq key starting with:", apiKey?.slice(0, 7));
+
+    if (!apiKey) {
       if (body.presetId && PRESET_FALLBACK_RESULTS[body.presetId]) {
         return NextResponse.json(PRESET_FALLBACK_RESULTS[body.presetId], { status: 200 });
       }
-      const message = err instanceof Error ? err.message : "Groq client initialization failed";
       return NextResponse.json(
-        { error: message, code: "INTERNAL_ERROR" },
+        { error: "GROQ_API_KEY is not set in environment variables", code: "INTERNAL_ERROR" },
         { status: 500 }
       );
     }
+
+    // Initialize Groq client dynamically per request
+    const groq = new Groq({ apiKey });
 
     // Call Groq API
     const MODEL = "llama-3.3-70b-versatile";
