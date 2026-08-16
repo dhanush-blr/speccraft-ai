@@ -75,27 +75,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const hasImage = Boolean(body.imageBase64 && body.imageBase64.trim() !== "");
+    // Validate screenshot is mandatory
+    if (!body.imageBase64 || body.imageBase64.trim() === "") {
+      return NextResponse.json(
+        { error: "Screenshot is mandatory for visual analysis", code: "INVALID_INPUT" },
+        { status: 400 }
+      );
+    }
 
-    // Validate image if provided
-    if (hasImage) {
-      const imgValidation = validateImageBase64(body.imageBase64!);
-      if (!imgValidation.valid) {
-        return NextResponse.json(
-          {
-            error: imgValidation.error,
-            code: imgValidation.error?.includes("large")
-              ? "PAYLOAD_TOO_LARGE"
-              : "INVALID_INPUT",
-          },
-          { status: 400 }
-        );
-      }
+    // Validate image format and size
+    const imgValidation = validateImageBase64(body.imageBase64);
+    if (!imgValidation.valid) {
+      return NextResponse.json(
+        {
+          error: imgValidation.error,
+          code: imgValidation.error?.includes("large")
+            ? "PAYLOAD_TOO_LARGE"
+            : "INVALID_INPUT",
+        },
+        { status: 400 }
+      );
     }
 
     const sanitizedNotes = sanitizeNotes(body.testerNotes);
     const systemPrompt = buildSystemPrompt();
-    const userMessage = buildUserMessage(sanitizedNotes, hasImage);
+    const userMessage = buildUserMessage(sanitizedNotes, true);
 
     // Check environment variable dynamically per request
     const apiKey = process.env.GROQ_API_KEY;

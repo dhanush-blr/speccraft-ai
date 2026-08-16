@@ -85,11 +85,15 @@ export default function Home() {
   }, []);
 
   const handleAnalyze = useCallback(async () => {
-    if (!testerNotes.trim() && !imageBase64) {
-      showToast("⚠ Please upload a screenshot or load a demo preset first.");
+    if (!imageBase64 || !imageBase64.trim()) {
+      setErrorMessage("Screenshot is mandatory for visual analysis. Please upload an image or select a preset.");
+      setAppState("error");
+      showToast("⚠ Screenshot is mandatory for visual analysis.");
       return;
     }
     if (!testerNotes.trim()) {
+      setErrorMessage("Please add tester notes describing the bug.");
+      setAppState("error");
       showToast("⚠ Please add tester notes describing the bug.");
       return;
     }
@@ -135,7 +139,19 @@ export default function Home() {
     }
   }, [testerNotes, imageBase64, mimeType, selectedPreset, fireConfetti, showToast]);
 
-  const canAnalyze = (imageBase64 || testerNotes.trim()) && appState !== "loading";
+  const hasScreenshot = Boolean(imageBase64 && imageBase64.trim().length > 0);
+  const hasNotes = Boolean(testerNotes && testerNotes.trim().length > 0);
+  const isLoading = appState === "loading";
+  const canAnalyze = hasScreenshot && hasNotes && !isLoading;
+
+  const helperText =
+    !hasScreenshot && !hasNotes
+      ? "Add tester notes and screenshot to generate spec"
+      : !hasScreenshot
+      ? "Upload a screenshot or pick a preset to continue"
+      : !hasNotes
+      ? "Add tester notes describing the bug to continue"
+      : null;
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -271,26 +287,37 @@ export default function Home() {
               </div>
 
               {/* CTA Button */}
-              <button
-                id="analyze-btn"
-                onClick={handleAnalyze}
-                disabled={!canAnalyze}
-                aria-label="Analyze bug and generate test spec"
-                className="btn-primary w-full flex items-center justify-center gap-3 animate-pulse-glow"
-              >
-                {appState === "loading" ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    <span>Analyzing with Groq AI...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={18} />
-                    <span>Analyze Bug & Generate Spec</span>
-                    <ChevronRight size={16} />
-                  </>
+              <div className="space-y-2">
+                <button
+                  id="analyze-btn"
+                  onClick={handleAnalyze}
+                  disabled={!canAnalyze}
+                  aria-label="Analyze bug and generate test spec"
+                  title={helperText || undefined}
+                  className={`btn-primary w-full flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed ${
+                    canAnalyze ? "animate-pulse-glow" : ""
+                  }`}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>Analyzing with Groq AI...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={18} />
+                      <span>Analyze Bug & Generate Spec</span>
+                      <ChevronRight size={16} />
+                    </>
+                  )}
+                </button>
+                {helperText && !isLoading && (
+                  <p className="text-[11px] text-[#94a3b8] text-center flex items-center justify-center gap-1.5 animate-fade-in">
+                    <AlertCircle size={12} className="text-[#6388fe] flex-shrink-0" />
+                    {helperText}
+                  </p>
                 )}
-              </button>
+              </div>
 
               {/* Error Message */}
               {appState === "error" && errorMessage && (
