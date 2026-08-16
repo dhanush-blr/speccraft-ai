@@ -23,6 +23,7 @@
   <a href="https://speccraft-ai-five.vercel.app"><img alt="Next.js 14" src="https://img.shields.io/badge/Next.js-14.2-black?style=for-the-badge&logo=next.js&logoColor=white"></a>
   <a href="https://speccraft-ai-five.vercel.app"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-Strict-3178c6?style=for-the-badge&logo=typescript&logoColor=white"></a>
   <a href="#-anti-hallucination-pipeline"><img alt="Groq" src="https://img.shields.io/badge/Groq-Llama_3.3_70B-f55036?style=for-the-badge&logo=groq&logoColor=white"></a>
+  <a href="#-fault-tolerant-multi-provider-architecture"><img alt="Gemini" src="https://img.shields.io/badge/Gemini-1.5_Flash_Fallback-4285F4?style=for-the-badge&logo=google&logoColor=white"></a>
   <a href="#-technical-specifications"><img alt="Playwright" src="https://img.shields.io/badge/Playwright-v1.40+-2EAD33?style=for-the-badge&logo=playwright&logoColor=white"></a>
   <a href="https://speccraft-ai-five.vercel.app"><img alt="Vercel" src="https://img.shields.io/badge/Vercel-Deployed-000000?style=for-the-badge&logo=vercel&logoColor=white"></a>
 </p>
@@ -31,7 +32,8 @@
   <a href="https://speccraft-ai-five.vercel.app"><b>🌐 Launch App</b></a> •
   <a href="#-application-preview--interactive-demo"><b>✨ Studio Preview</b></a> •
   <a href="#-interactive-qa-artifacts-samples"><b>🧪 Sample Artifacts</b></a> •
-  <a href="#-anti-hallucination-pipeline"><b>🛡️ Anti-Hallucination Engine</b></a> •
+  <a href="#-anti-hallucination-pipeline"><b>🛡️ Anti-Hallucination</b></a> •
+  <a href="#-fault-tolerant-multi-provider-architecture"><b>⚡ Multi-Provider Architecture</b></a> •
   <a href="#-quick-start"><b>🚀 Quick Start</b></a> •
   <a href="#-deploy-to-vercel"><b>🚢 Deploy to Vercel</b></a>
 </p>
@@ -231,6 +233,54 @@ flowchart TD
 
 ---
 
+## 🛡️ Fault-Tolerant Multi-Provider Architecture
+
+SpecCraft AI is engineered with a **multi-model failover pipeline** that delivers sub-second inference during normal operation and seamless, zero-downtime resilience during high judge concurrency, traffic spikes, or provider outages.
+
+### Request Flow & Fallback Pipeline
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│               🖼️ Screenshot + Tester Notes (UI Input)                  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│           ⚡ PRIMARY ENGINE: Groq API (Llama 3.3 70B Versatile)         │
+│           • Ultra-fast LPU inference (under 2–3s)                      │
+│           • Native structured JSON validation                          │
+└───────────────────┬────────────────────────────────┬───────────────────┘
+                    │                                │
+           [HTTP 200 Success]              [HTTP 429 / 5xx / Rate Limit]
+                    │                                │
+                    ▼                                ▼
+       ┌────────────────────────┐       ┌────────────────────────────────────────┐
+       │ ✅ Playwright Spec      │       │ 🔄 AUTOMATIC FALLBACK: Google Gemini   │
+       │ ✅ GitHub Issue         │       │ (Gemini 1.5 Flash / Flash Latest)      │
+       │ ✅ Jira Bug Ticket      │       │ • Multi-modal vision analysis          │
+       │ ✅ Root Cause Audit     │       │ • Structured schema enforcement        │
+       └────────────────────────┘       └───────────────────┬────────────────────┘
+                                                            │
+                                                   [HTTP 200 Success]
+                                                            │
+                                                            ▼
+                                               ┌────────────────────────┐
+                                               │ ✅ Playwright Spec      │
+                                               │ ✅ GitHub Issue         │
+                                               │ ✅ Jira Bug Ticket      │
+                                               │ ✅ Root Cause Audit     │
+                                               └────────────────────────┘
+```
+
+### Core Reliability Benefits
+
+- **⚡ Sub-Second Primary Latency**: Groq LPUs process high-resolution visual evidence and generate full TypeScript specifications in under 3 seconds.
+- **🔄 Instant Zero-Downtime Failover**: If the primary Groq tier reaches token rate limits (`HTTP 429`) or server issues (`5xx`), `/api/analyze` catches the exception and immediately invokes Google's Gemini Flash engine with the identical system prompt and schema — the user experiences zero failure.
+- **🛡️ Deterministic Offline Preset Safety Net**: In extreme multi-tenant network outages, pre-verified offline presets ensure zero disruption during hackathon judging and live demos.
+- **⏳ Defensive UI Cooldown Protection**: If both live providers are temporarily exhausted, the frontend activates an isolated 60-second amber countdown banner, automatically locking and restoring the submit button.
+
+---
+
 ## 🎮 Instant Demo Presets
 
 Test the platform instantly without uploading any files:
@@ -256,9 +306,13 @@ npm install
 ```bash
 cp .env.example .env.local
 ```
-Add your free [Groq API Key](https://console.groq.com/keys) to `.env.local`:
+Add your [Groq API Key](https://console.groq.com/keys) and optional [Gemini API Key](https://aistudio.google.com/app/apikey) to `.env.local`:
 ```ini
+# Primary: Groq API Key (https://console.groq.com/keys)
 GROQ_API_KEY=gsk_your_groq_api_key_here
+
+# Seamless Fallback: Google Gemini API Key (https://aistudio.google.com/app/apikey)
+GEMINI_API_KEY=AIzaSy_your_gemini_api_key_here
 ```
 
 ### 3. Run Development Server
@@ -271,10 +325,12 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
 ## ⚙️ Technical Specifications
 
-### Two-Tier Validation Boundary
-- **Client-Side Boundary**: Intercepts files before memory allocation (`file.size > 4MB` or non-image MIME).
-- **Server-Side Boundary**: `/api/analyze` validates base64 payload size, sanitizes tester notes against script injection, and validates AI response against Zod schemas.
-- **Model Engine**: Powered by Groq ultra-low-latency `llama-3.3-70b-versatile` with native JSON mode.
+### Multi-Model Fallback Engine
+- **Primary AI Engine**: Groq ultra-low-latency `llama-3.3-70b-versatile` with native JSON mode.
+- **Failover AI Engine**: Google Gemini `gemini-flash-latest` / `gemini-1.5-flash` with multi-modal inline image processing.
+- **Two-Tier Validation Boundary**:
+  - **Client-Side Boundary**: Intercepts files before memory allocation (`file.size > 4MB` or non-image MIME).
+  - **Server-Side Boundary**: `/api/analyze` validates base64 payload size, sanitizes tester notes against script injection, and validates AI response against Zod schemas.
 
 ---
 
@@ -323,7 +379,7 @@ Deploy your own instance with 1-click:
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_USERNAME/speccraft-ai)
 
 1. Click the button above to clone to your GitHub account.
-2. In the Vercel project settings, set `GROQ_API_KEY` under **Environment Variables**.
+2. In the Vercel project settings, set `GROQ_API_KEY` and `GEMINI_API_KEY` under **Environment Variables**.
 3. Hit **Deploy** — your studio will be live globally in under 60 seconds!
 
 ---
