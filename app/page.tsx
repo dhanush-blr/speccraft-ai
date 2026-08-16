@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { AnalysisResult, isAnalyzeError, Preset, MimeType } from "@/lib/types";
 import { PRESETS } from "@/lib/presets";
 import DropZone from "@/components/DropZone";
@@ -20,6 +20,7 @@ import {
   Code2,
   Brain,
   FileText,
+  Clock,
 } from "lucide-react";
 
 type AppState = "idle" | "loading" | "success" | "error";
@@ -32,9 +33,37 @@ export default function Home() {
   const [appState, setAppState] = useState<AppState>("idle");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const confettiFired = useRef(false);
   const outputRef = useRef<HTMLDivElement>(null);
+
+  // Clear timer on component unmount
+  useEffect(() => {
+    return () => {
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    };
+  }, []);
+
+  const startRateLimitCooldown = useCallback((seconds: number = 60) => {
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    setIsRateLimited(true);
+    setCountdown(seconds);
+
+    countdownTimerRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+          setIsRateLimited(false);
+          setAppState("idle");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
 
   // Dynamically import canvas-confetti to avoid SSR issues
   const fireConfetti = useCallback(async () => {
@@ -117,6 +146,16 @@ export default function Home() {
       });
 
       const data = await res.json();
+      const errorText = (data?.error || "").toLowerCase();
+      const is429 = res.status === 429 || errorText.includes("rate limit") || errorText.includes("too many requests");
+
+      if (is429) {
+        setErrorMessage("");
+        setAppState("error");
+        startRateLimitCooldown(60);
+        showToast("⏳ Free tier quota reached. 60s cooldown active.");
+        return;
+      }
 
       if (!res.ok || isAnalyzeError(data)) {
         setErrorMessage(data.error || "Analysis failed. Please try again.");
@@ -134,18 +173,28 @@ export default function Home() {
       }, 200);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Network error. Please try again.";
-      setErrorMessage(msg);
-      setAppState("error");
+      const is429 = msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("too many requests");
+      if (is429) {
+        setErrorMessage("");
+        setAppState("error");
+        startRateLimitCooldown(60);
+        showToast("⏳ Free tier quota reached. 60s cooldown active.");
+      } else {
+        setErrorMessage(msg);
+        setAppState("error");
+      }
     }
-  }, [testerNotes, imageBase64, mimeType, selectedPreset, fireConfetti, showToast]);
+  }, [testerNotes, imageBase64, mimeType, selectedPreset, fireConfetti, showToast, startRateLimitCooldown]);
 
   const hasScreenshot = Boolean(imageBase64 && imageBase64.trim().length > 0);
   const hasNotes = Boolean(testerNotes && testerNotes.trim().length > 0);
   const isLoading = appState === "loading";
-  const canAnalyze = hasScreenshot && hasNotes && !isLoading;
+  const canAnalyze = hasScreenshot && hasNotes && !isLoading && !isRateLimited;
 
   const helperText =
-    !hasScreenshot && !hasNotes
+    isRateLimited
+      ? null
+      : !hasScreenshot && !hasNotes
       ? "Add tester notes and screenshot to generate spec"
       : !hasScreenshot
       ? "Upload a screenshot or pick a preset to continue"
@@ -286,6 +335,20 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Rate Limit Cooldown Amber Alert */}
+              {isRateLimited && countdown > 0 && (
+                <div
+                  role="alert"
+                  className="flex items-center gap-2.5 p-3.5 rounded-xl bg-[rgba(245,158,11,0.1)] border border-[rgba(245,158,11,0.3)] text-amber-300 text-[12px] font-medium animate-fade-in"
+                >
+                  <Clock size={16} className="text-amber-400 flex-shrink-0 animate-pulse" />
+                  <span>
+                    ⏳ Free Tier Quota Reached: Cooldown active for{" "}
+                    <strong className="text-amber-200 font-bold">{countdown}s</strong> before next request.
+                  </span>
+                </div>
+              )}
+
               {/* CTA Button */}
               <div className="space-y-2">
                 <button
@@ -293,12 +356,21 @@ export default function Home() {
                   onClick={handleAnalyze}
                   disabled={!canAnalyze}
                   aria-label="Analyze bug and generate test spec"
-                  title={helperText || undefined}
+                  title={
+                    isRateLimited
+                      ? `Cooldown active for ${countdown}s`
+                      : helperText || undefined
+                  }
                   className={`btn-primary w-full flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed ${
                     canAnalyze ? "animate-pulse-glow" : ""
                   }`}
                 >
-                  {isLoading ? (
+                  {isRateLimited ? (
+                    <>
+                      <Clock size={18} className="animate-spin" />
+                      <span>Cooldown Active ({countdown}s)</span>
+                    </>
+                  ) : isLoading ? (
                     <>
                       <Loader2 size={18} className="animate-spin" />
                       <span>Analyzing with Groq AI...</span>
@@ -311,7 +383,7 @@ export default function Home() {
                     </>
                   )}
                 </button>
-                {helperText && !isLoading && (
+                {helperText && !isLoading && !isRateLimited && (
                   <p className="text-[11px] text-[#94a3b8] text-center flex items-center justify-center gap-1.5 animate-fade-in">
                     <AlertCircle size={12} className="text-[#6388fe] flex-shrink-0" />
                     {helperText}
@@ -319,8 +391,8 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Error Message */}
-              {appState === "error" && errorMessage && (
+              {/* Standard Error Message (Isolated from 429) */}
+              {appState === "error" && errorMessage && !isRateLimited && (
                 <div
                   role="alert"
                   className="flex items-start gap-3 p-4 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] animate-fade-in"

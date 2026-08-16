@@ -12,10 +12,11 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompt";
 import { parseAndValidateResponse } from "@/lib/validator";
 import { getPresetById, PRESET_FALLBACK_RESULTS } from "@/lib/presets";
-import { AnalyzeRequest } from "@/lib/types";
+import { AnalyzeRequest, AnalysisResult } from "@/lib/types";
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB decoded
 const MAX_NOTES_LENGTH = 2000;
@@ -40,6 +41,57 @@ function validateImageBase64(base64: string): { valid: boolean; error?: string }
     };
   }
   return { valid: true };
+}
+
+// Seamless Gemini fallback handler with multi-model resilience
+async function callGeminiFallback(
+  imageBase64: string,
+  mimeType: string,
+  userMessage: string,
+  systemPrompt: string
+): Promise<AnalysisResult> {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (!geminiApiKey) {
+    throw new Error("GEMINI_API_KEY is not configured in environment variables");
+  }
+
+  const genAI = new GoogleGenerativeAI(geminiApiKey);
+  const candidateModels = ["gemini-flash-latest", "gemini-3-flash-preview"];
+
+  const validMimes = ["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"];
+  const targetMime = validMimes.includes(mimeType) ? mimeType : "image/png";
+
+  const imagePart = {
+    inlineData: {
+      data: imageBase64,
+      mimeType: targetMime,
+    },
+  };
+
+  let lastError: Error | null = null;
+  for (const modelName of candidateModels) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.1,
+        },
+        systemInstruction: systemPrompt,
+      });
+
+      const geminiResult = await model.generateContent([userMessage, imagePart]);
+      const rawResponse = geminiResult.response.text();
+      if (rawResponse && rawResponse.trim().length > 0) {
+        return parseAndValidateResponse(rawResponse);
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`[SpecCraft] Gemini model ${modelName} issue:`, lastError.message.slice(0, 120));
+    }
+  }
+
+  throw lastError || new Error("All Gemini fallback models failed");
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -105,23 +157,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const apiKey = process.env.GROQ_API_KEY;
     console.log("Using Groq key starting with:", apiKey?.slice(0, 7));
 
-    if (!apiKey) {
+    if (!apiKey && !process.env.GEMINI_API_KEY) {
       if (body.presetId && PRESET_FALLBACK_RESULTS[body.presetId]) {
         return NextResponse.json(PRESET_FALLBACK_RESULTS[body.presetId], { status: 200 });
       }
       return NextResponse.json(
-        { error: "GROQ_API_KEY is not set in environment variables", code: "INTERNAL_ERROR" },
+        { error: "GROQ_API_KEY or GEMINI_API_KEY is not set in environment variables", code: "INTERNAL_ERROR" },
         { status: 500 }
       );
     }
 
-    // Initialize Groq client dynamically per request
-    const groq = new Groq({ apiKey });
-
-    // Call Groq API
+    // Primary: Call Groq API
     const MODEL = "llama-3.3-70b-versatile";
 
     try {
+      if (!apiKey) {
+        throw new Error("GROQ_API_KEY is not configured");
+      }
+
+      const groq = new Groq({ apiKey });
       const completion = await groq.chat.completions.create({
         model: MODEL,
         messages: [
@@ -142,9 +196,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const result = parseAndValidateResponse(rawResponse);
       return NextResponse.json(result, { status: 200 });
     } catch (apiErr) {
-      console.warn("[SpecCraft] Groq call or parse issue:", apiErr instanceof Error ? apiErr.message : apiErr);
+      console.warn(
+        "[SpecCraft] Groq failed/rate-limited. Switching to Gemini fallback...",
+        apiErr instanceof Error ? apiErr.message : apiErr
+      );
 
-      // If preset is tested and Groq rate-limits or fails, use pre-verified fallback
+      // Attempt Gemini fallback
+      if (process.env.GEMINI_API_KEY) {
+        try {
+          const geminiResult = await callGeminiFallback(
+            body.imageBase64!,
+            body.mimeType || "image/png",
+            userMessage,
+            systemPrompt
+          );
+          return NextResponse.json(geminiResult, { status: 200 });
+        } catch (geminiErr) {
+          console.warn(
+            "[SpecCraft] Gemini fallback call failed:",
+            geminiErr instanceof Error ? geminiErr.message : geminiErr
+          );
+        }
+      }
+
+      // If preset is tested and live APIs fail/rate-limit, use pre-verified fallback
       if (body.presetId && PRESET_FALLBACK_RESULTS[body.presetId]) {
         return NextResponse.json(PRESET_FALLBACK_RESULTS[body.presetId], { status: 200 });
       }
@@ -170,3 +245,4 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 }
+
